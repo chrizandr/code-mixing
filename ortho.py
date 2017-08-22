@@ -17,9 +17,9 @@ def ortho_syllable(word):
             SW = SW + word[i+1] + " "
             i += 1
         elif grad_vec[i] == -1 and i != len(word)-1:
-            if word[i+1] == 'n' and i+1 != len(word)-1:
+            if word[i+1] in ['r', 's', 't', 'l', 'n', 'd'] and i+1 != len(word)-1:
                 if vector[i+2] == 0:
-                    SW = SW + 'n'
+                    SW = SW + word[i+1]
                     i += 1
             SW = SW + " "
         i += 1
@@ -50,5 +50,5 @@ def vectorize(word):
 
 
 if __name__ == "__main__":
-    vec = ortho_syllable("consonant")
-    pdb.set_trace()
+    vec = ortho_syllable("prarthna")
+    print(vec)
