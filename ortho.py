@@ -11,20 +11,22 @@ def ortho_syllable(word):
     grad_vec = gradient(vector)
     SW = ""
     i = 0
-    while(i < len(word)):
+    w_len = len(word)
+    while(i < w_len):
         SW = SW + word[i]
-        if i == 0 and grad_vec[i] == -1:
-            SW = SW + word[i+1] + " "
-            i += 1
-        elif grad_vec[i] == -1 and i != len(word)-1:
-            if word[i+1] in ['r', 's', 't', 'l', 'n', 'd'] and i+1 != len(word)-1:
-                if vector[i+2] == 0:
-                    SW = SW + word[i+1]
-                    i += 1
-            SW = SW + " "
+        if (i+1) < w_len:
+            if i == 0 and grad_vec[i] == -1:
+                SW = SW + word[i+1] + " "
+                i += 1
+            elif grad_vec[i] == -1 and i != w_len-1:
+                if word[i+1] in ['r', 's', 't', 'l', 'n', 'd'] and i+1 != w_len-1:
+                    if vector[i+2] == 0:
+                        SW = SW + word[i+1]
+                        i += 1
+                SW = SW + " "
         i += 1
     # pdb.set_trace()
-    return SW
+    return SW.split()
 
 
 def is_vowel(char):
