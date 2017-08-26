@@ -83,27 +83,25 @@ def clean_str(string):
     return string.strip().lower()
 
 
-def break_in_subword(f, add_word=False):
+def break_in_subword(data, add_word=False):
     """Break the test into sub_words."""
     texts = []
     word_texts = []
 
-    with json.load(open(f, "r")) as data:
-        for x in data:
-            text = data["text"]
-            text = ' '.join(re.sub("(@[A-Za-z0-9]+)|([^0-9A-Za-z \t])|(\w+:\/\/\S+)", " ", text).split())
-            cleaned_text = clean_str(text)
-            splitted_text = cleaned_text.split()
-            joined_text = []
-            word_list = []
-            for y in splitted_text:
-                if not y.isspace():
-                    joined_text.append(ortho_syllable(y.strip()))
-                    if add_word:
-                        word_list.append(y.strip())
-            texts.append(joined_text)
-            if add_word:
-                word_texts.append(word_list)
+    for text in data:
+        text = ' '.join(re.sub("(@[A-Za-z0-9]+)|([^0-9A-Za-z \t])|(\w+:\/\/\S+)", " ", text).split())
+        cleaned_text = clean_str(text)
+        splitted_text = cleaned_text.split()
+        joined_text = []
+        word_list = []
+        for y in splitted_text:
+            if not y.isspace():
+                joined_text.extend(ortho_syllable(y.strip()))
+                if add_word:
+                    word_list.append(y.strip())
+        texts.append(' '.join(joined_text))
+        if add_word:
+            word_texts.append(word_list)
 
     if add_word:
         return texts, word_texts
@@ -112,6 +110,11 @@ def break_in_subword(f, add_word=False):
 
 
 if __name__ == "__main__":
+    print("Reading from file")
     data = read_data_tsv("conversations.out")
-    sentences = get_sentences(data)
-    write_data("final_codemixed_extracted.txt", sentences)
+    print("Cleaning words")
+    broken_words = break_in_subword(data)
+    print("Writing words")
+    write_data("conversations_cleaned.txt", broken_words)
+    # sentences = get_sentences(data)
+    # write_data("final_codemixed_extracted.txt", sentences)
