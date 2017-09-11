@@ -4,6 +4,7 @@ import json
 from data_handler import read_data
 import pdb
 
+
 def write_to_file(data, filepath):
     """Write data to the file."""
     f = open(filepath, 'w')
@@ -13,7 +14,7 @@ def write_to_file(data, filepath):
 
 def find_distribution(data):
     """Find the distributions of classes in the data."""
-    id_list = [[],[],[]]
+    id_list = [[], [], []]
     positive = list()
     for Id,each in enumerate(data):
         if each['sentiment']==-1:
@@ -22,7 +23,7 @@ def find_distribution(data):
            id_list[each['sentiment']].append(Id)
     size = min(min(len(id_list[0]),len(id_list[1])),len(id_list[2]))
     print size
-    nrmlzd_list = [id_list[0][0:size], id_list[1][0:size], id_list[2][0:size]] 
+    nrmlzd_list = [id_list[0][0:size], id_list[1][0:size], id_list[2][0:size]]
     return nrmlzd_list, size
 
 
@@ -50,11 +51,10 @@ def divde_train_test(data):
     #pdb.set_trace()
     print len(train), len(test)
     return train, test
-    
+
 
 if __name__ == "__main__":
     data = read_data("final_codemixed.json")
     train, test = divde_train_test(data)
     write_to_file(train, "train_data.json")
     write_to_file(test, "test_data.json")
-
