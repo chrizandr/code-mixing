@@ -28,6 +28,14 @@ def read_data_json(filepath):
     return data
 
 
+def text_from_json(f):
+    """Get sentences from the JSON file."""
+    f = open(f, 'r')
+    data = json.load(f)
+    texts = [x["text"] for x in data]
+    return texts
+
+
 def read_data_tsv(filepath):
     """Read data from a .tsv file."""
     data = list()
@@ -95,14 +103,13 @@ def break_in_subword(data, add_word=False):
         joined_text = []
         word_list = []
         for y in splitted_text:
-            if not y.isspace():
-                joined_text.extend(ortho_syllable(y.strip()))
+            if(not y.isspace()):
+                joined_text.append(ortho_syllable(y.strip()))
                 if add_word:
                     word_list.append(y.strip())
-        texts.append(' '.join(joined_text))
+        texts.append(joined_text)
         if add_word:
             word_texts.append(word_list)
-
     if add_word:
         return texts, word_texts
     else:
