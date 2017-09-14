@@ -14,20 +14,21 @@ class Sentences(object):
     def __iter__(self):
         """Iterator."""
         for line in open(self.filename):
-            yield line.split()
+            if not line.isspace():
+                yield line.lower().split()
 
 
-def main():
+def main(INPUT_FILE, OUTPUT_MODEL, OUTPUT_FILE):
     """Main."""
     print("Training model")
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
-    sentences = Sentences("final_codemixed_extracted.txt")
+    sentences = Sentences(INPUT_FILE)
     # train word2vec on the two sentences
     model = gensim.models.Word2Vec(sentences, size=100, window=5, min_count=5, workers=4)
-    model.save("english_w2vec_gensim.mdl")
+    model.save(OUTPUT_MODEL)
 
-    gen_index_file(filepath="english_w2vec.txt", model="english_w2vec_gensim.mdl")
+    gen_index_file(filepath=OUTPUT_FILE, model=OUTPUT_MODEL)
 
 
 def gen_index_file(filepath, model):
@@ -37,4 +38,7 @@ def gen_index_file(filepath, model):
 
 
 if __name__ == "__main__":
-    main()
+    INPUT_FILE = "data/IITB.en-hi.hi.syll"
+    OUTPUT_FILE = "data/parallel.hi.syll"
+    OUTPUT_MODEL = "models/parallel.hi.syll.mdl"
+    main(INPUT_FILE, OUTPUT_MODEL, OUTPUT_FILE)

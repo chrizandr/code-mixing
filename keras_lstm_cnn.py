@@ -8,7 +8,9 @@ from keras.layers import Embedding, LSTM, Bidirectional, TimeDistributed
 from keras.models import Model
 from keras import backend as K
 
-from data_handler import text_from_json, break_in_subword
+import gensim
+
+from data_handler import text_from_json, break_in_subword, read_data
 import pdb
 
 
@@ -129,88 +131,117 @@ def get_sequences(texts, max_slen, max_wlen, tokenizer):
     return data
 
 
-################################################################################
+def get_embeddings_tokenizer(filename, EMBEDDING_DIM):
+    """Get the embeddings and the tokenizer for words."""
+    data = read_data(filename)
+    texts = []
 
+    embedding_matrix = np.zeros((len(data), EMBEDDING_DIM), dtype="float64")
+    for i in range(len(data)):
+        raw = data[i].split()
+        label = raw[0]
+        vector = [float(x) for x in raw[1:EMBEDDING_DIM+1]]
+        texts.append(label)
+        embedding_matrix[i] = vector
+
+    word_tokenizer = Tokenizer()
+    word_tokenizer.fit_on_texts(texts)
+    word_tokenizer.word_index['<<SPAD>>'] = len(word_tokenizer.word_index) + 1
+
+    return embedding_matrix, word_tokenizer
+
+
+
+
+################################################################################
 TRAIN_DATA_FILE = "data/train_data.json"
 TEST_DATA_FILE = "data/test_data.json"
 
-MAX_WORD_LENGTH = 5
+MAX_WORD_LENGTH = 10
+MAX_SYLLABLE_LENGHT = 5
 MAX_SENT_LENGTH = 60
 EMBEDDING_DIM = 100
 VALIDATION_SPLIT = 0.2
 
 ################################################################################
-print("C1")
-tokenizer = maptosubword([TRAIN_DATA_FILE, TEST_DATA_FILE])
-print("Map created")
+# tokenizer = maptosubword([TRAIN_DATA_FILE, TEST_DATA_FILE])
+# print("Map created")
+#
+# train_texts = break_in_subword(text_from_json(TRAIN_DATA_FILE))
+# test_texts = break_in_subword(text_from_json(TEST_DATA_FILE))
+#
+# train_data = get_sequences(train_texts, MAX_SENT_LENGTH, MAX_WORD_LENGTH, tokenizer)
+# test_data = get_sequences(test_texts, MAX_SENT_LENGTH, MAX_WORD_LENGTH, tokenizer)
+# pdb.set_trace()
+# train_labels = get_labels(TRAIN_DATA_FILE)
+# test_labels = get_labels(TEST_DATA_FILE)
+#
+# print("Sequence created")
+#
+# x_train, y_train, x_val, y_val = split_validation(train_data, train_labels)
+#
+# del train_data
+# del train_labels
+#
+# print('Number of positive and negative tweets in training and validation set')
+# print (y_train.sum(axis=0))
+# print (y_val.sum(axis=0))
+hindi_syllable_tokenizer = ""
+hindi_syllable_embedding_matrix = ""
+eng_syllable_tokenizer = ""
+eng_syllable_embedding_matrix = ""
 
-train_texts = break_in_subword(text_from_json(TRAIN_DATA_FILE))
-test_texts = break_in_subword(text_from_json(TEST_DATA_FILE))
+hindi_embedding_matrix, hindi_word_tokenizer = get_embeddings_tokenizer("data/parallel.hi", EMBEDDING_DIM)
+eng_embedding_matrix, eng_word_tokenizer = get_embeddings_tokenizer("data/parallel.en", EMBEDDING_DIM)
 
-train_data = get_sequences(train_texts, MAX_SENT_LENGTH, MAX_WORD_LENGTH, tokenizer)
-test_data = get_sequences(test_texts, MAX_SENT_LENGTH, MAX_WORD_LENGTH, tokenizer)
+################################################################################
+word_lstm = Bidirectional(LSTM(100))
+sentence_lstm = Bidirectional(LSTM(100))
+
+hindi_word_embedding_layer = Embedding(len(hindi_word_tokenizer.word_index)+1,
+                                       EMBEDDING_DIM,
+                                       weights=[hindi_embedding_matrix],
+                                       input_length=EMBEDDING_DIM,
+                                       trainable=True)
+
+hindi_syllable_embedding_layer = Embedding(len(hindi_syllable_tokenizer.word_index)+1,
+                                           EMBEDDING_DIM,
+                                           weights=[hindi_syllable_embedding_matrix],
+                                           input_length=EMBEDDING_DIM,
+                                           trainable=True)
+
+hindi_sentence_input = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
+
+hindi_word_input = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
+
+hindi_word_lstm = word_lstm(hindi_word_input)
+hindi_embedded_word = hindi_word_embedding_layer(hindi_word_lstm)
+
+hindi_word_encoder = Model(hindi_word_input, hindi_embedded_word)
+
+hindi_sentence_lstm = sentence_lstm(hindi_word_encoder)
+hindi_sentence_encoder = TimeDistributed(hindi_sentence_lstm)(hindi_sentence_input)
+
+################################################################################
+
+eng_embedding_layer = Embedding(len(eng_word_tokenizer.word_index)+1,
+                                EMBEDDING_DIM,
+                                weights=[eng_embedding_matrix],
+                                input_length=EMBEDDING_DIM,
+                                trainable=True)
+
+eng_sentence_input = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
+
+eng_word_input = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
+eng_word_lstm = Bidirectional(LSTM(EMBEDDING_DIM))(eng_word_input)
+eng_embedded_word = eng_embedding_layer(eng_word_lstm)
+
+eng_word_encoder = Model(eng_word_input, eng_embedded_word)
+
+eng_sentence_lstm = Bidirectional(LSTM(100))(eng_word_encoder)
+eng_sentence_encoder = TimeDistributed(eng_sentence_lstm)(eng_sentence_input)
+
 pdb.set_trace()
-train_labels = get_labels(TRAIN_DATA_FILE)
-test_labels = get_labels(TEST_DATA_FILE)
-
-print("Sequence created")
-
-x_train, y_train, x_val, y_val = split_validation(train_data, train_labels)
-
-del train_data
-del train_labels
-
-print('Number of positive and negative tweets in training and validation set')
-print (y_train.sum(axis=0))
-print (y_val.sum(axis=0))
-
-################################################################################
-################################################################################
-# Hierachical Model graph
-################################################################################
-# Hindi Word2Vec
-embedding_matrix = np.random.uniform(
-    low=0.1, high=0.5,
-    size=(len(tokenizer.word_index)+1, EMBEDDING_DIM))
-
-embedding_layer = Embedding(len(tokenizer.word_index)+1,
-                            EMBEDDING_DIM,
-                            weights=[embedding_matrix],
-                            input_length=MAX_WORD_LENGTH,
-                            trainable=True)
-
-word_input = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
-embedded_sequences = embedding_layer(word_input)
-l_lstm = Bidirectional(LSTM(100))(embedded_sequences)
-word_encoder = Model(word_input, l_lstm)
-
-sentence_input = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
-sentence_encoder = TimeDistributed(word_encoder)(sentence_input)
-l_lstm_sent = Bidirectional(LSTM(100))(sentence_encoder)
-# preds = Dense(3, activation='softmax')(l_lstm_sent)
-
-# https://keras.io/getting-started/functional-api-guide/#shared-layers [Check this link]
-
-# English Word2Vec
-embedding_matrix1 = np.random.uniform(
-    low=0.1, high=0.5,
-    size=(len(tokenizer.word_index)+1, EMBEDDING_DIM))
-
-embedding_layer1 = Embedding(len(tokenizer.word_index)+1,
-                             EMBEDDING_DIM,
-                             weights=[embedding_matrix1],
-                             input_length=MAX_WORD_LENGTH,
-                             trainable=True)
-
-word_input1 = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
-embedded_sequences1 = embedding_layer(word_input1)
-l_lstm1 = Bidirectional(LSTM(100))(embedded_sequences1)
-word_encoder1 = Model(word_input1, l_lstm1)
-
-sentence_input1 = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
-sentence_encoder1 = TimeDistributed(word_encoder1)(sentence_input1)
-l_lstm_sent1 = Bidirectional(LSTM(100))(sentence_encoder1)
-# preds = Dense(3, activation='softmax')(l_lstm_sent)
 
 loss_layer = Lambda(lambda x, y: K.categorical_crossentropy(x, y), output_shape=(1,))(l_lstm_sent, l_lstm_sent1)
 
@@ -228,3 +259,13 @@ model.fit([h_train, e_train], y_train, validation_data=([h_val, e_val], y_val),
 print("Evaluating model ...")
 score, accuracy = model.evaluate(test_data, test_labels, batch_size=32)
 print(score, accuracy)
+
+
+# #############################
+
+
+
+
+
+
+# #############################

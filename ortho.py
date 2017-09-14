@@ -1,8 +1,6 @@
 """Orthagraphic syllable splitting."""
 
-import re
 import numpy as np
-import pdb
 
 
 def ortho_syllable(word):
