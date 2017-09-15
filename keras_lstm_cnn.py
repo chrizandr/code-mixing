@@ -6,7 +6,7 @@ from keras.preprocessing.text import Tokenizer
 from keras.layers import Input, Lambda
 from keras.layers import Embedding, LSTM, Bidirectional, TimeDistributed
 from keras.models import Model
-from keras import backend as K
+from keras.losses import mean_squared_error
 
 import gensim
 
@@ -136,7 +136,8 @@ def get_embeddings_tokenizer(filename, EMBEDDING_DIM):
     data = read_data(filename)
     texts = []
 
-    embedding_matrix = np.zeros((len(data), EMBEDDING_DIM), dtype="float64")
+    embedding_matrix = np.random.randn(len(data), EMBEDDING_DIM)
+    embedding_matrix = embedding_matrix.astype(np.float64)
     for i in range(len(data)):
         raw = data[i].split()
         label = raw[0]
@@ -151,14 +152,11 @@ def get_embeddings_tokenizer(filename, EMBEDDING_DIM):
     return embedding_matrix, word_tokenizer
 
 
-
-
 ################################################################################
 TRAIN_DATA_FILE = "data/train_data.json"
 TEST_DATA_FILE = "data/test_data.json"
 
-MAX_WORD_LENGTH = 10
-MAX_SYLLABLE_LENGHT = 5
+MAX_WORD_LENGTH = 5
 MAX_SENT_LENGTH = 60
 EMBEDDING_DIM = 100
 VALIDATION_SPLIT = 0.2
@@ -186,10 +184,6 @@ VALIDATION_SPLIT = 0.2
 # print('Number of positive and negative tweets in training and validation set')
 # print (y_train.sum(axis=0))
 # print (y_val.sum(axis=0))
-hindi_syllable_tokenizer = ""
-hindi_syllable_embedding_matrix = ""
-eng_syllable_tokenizer = ""
-eng_syllable_embedding_matrix = ""
 
 hindi_embedding_matrix, hindi_word_tokenizer = get_embeddings_tokenizer("data/parallel.hi", EMBEDDING_DIM)
 eng_embedding_matrix, eng_word_tokenizer = get_embeddings_tokenizer("data/parallel.en", EMBEDDING_DIM)
@@ -198,59 +192,50 @@ eng_embedding_matrix, eng_word_tokenizer = get_embeddings_tokenizer("data/parall
 word_lstm = Bidirectional(LSTM(100))
 sentence_lstm = Bidirectional(LSTM(100))
 
-hindi_word_embedding_layer = Embedding(len(hindi_word_tokenizer.word_index)+1,
+
+hindi_word_embedding_layer = Embedding(len(hindi_word_tokenizer.word_index),
                                        EMBEDDING_DIM,
                                        weights=[hindi_embedding_matrix],
                                        input_length=EMBEDDING_DIM,
                                        trainable=True)
-
-hindi_syllable_embedding_layer = Embedding(len(hindi_syllable_tokenizer.word_index)+1,
-                                           EMBEDDING_DIM,
-                                           weights=[hindi_syllable_embedding_matrix],
-                                           input_length=EMBEDDING_DIM,
-                                           trainable=True)
-
-hindi_sentence_input = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
-
+# Hindi Word model
 hindi_word_input = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
+hindi_word_embedding = hindi_word_embedding_layer(hindi_word_input)
+hindi_word_lstm = word_lstm(hindi_word_embedding)
+hindi_word_model = Model(hindi_word_input, hindi_word_lstm)
 
-hindi_word_lstm = word_lstm(hindi_word_input)
-hindi_embedded_word = hindi_word_embedding_layer(hindi_word_lstm)
-
-hindi_word_encoder = Model(hindi_word_input, hindi_embedded_word)
-
-hindi_sentence_lstm = sentence_lstm(hindi_word_encoder)
-hindi_sentence_encoder = TimeDistributed(hindi_sentence_lstm)(hindi_sentence_input)
+# English Sentence model
+hindi_sentence_input = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
+hindi_sentence = TimeDistributed(hindi_word_model)(hindi_sentence_input)
+hindi_sentence_lstm = sentence_lstm(hindi_sentence)
 
 ################################################################################
 
-eng_embedding_layer = Embedding(len(eng_word_tokenizer.word_index)+1,
-                                EMBEDDING_DIM,
-                                weights=[eng_embedding_matrix],
-                                input_length=EMBEDDING_DIM,
-                                trainable=True)
-
-eng_sentence_input = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
-
+eng_word_embedding_layer = Embedding(len(eng_word_tokenizer.word_index),
+                                     EMBEDDING_DIM,
+                                     weights=[eng_embedding_matrix],
+                                     input_length=EMBEDDING_DIM,
+                                     trainable=True)
+# Hindi Word model
 eng_word_input = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
-eng_word_lstm = Bidirectional(LSTM(EMBEDDING_DIM))(eng_word_input)
-eng_embedded_word = eng_embedding_layer(eng_word_lstm)
+eng_word_embedding = eng_word_embedding_layer(eng_word_input)
+eng_word_lstm = word_lstm(eng_word_embedding)
+eng_word_model = Model(eng_word_input, eng_word_lstm)
 
-eng_word_encoder = Model(eng_word_input, eng_embedded_word)
+# English Sentence model
+eng_sentence_input = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
+eng_sentence = TimeDistributed(eng_word_model)(eng_sentence_input)
+eng_sentence_lstm = sentence_lstm(eng_sentence)
 
-eng_sentence_lstm = Bidirectional(LSTM(100))(eng_word_encoder)
-eng_sentence_encoder = TimeDistributed(eng_sentence_lstm)(eng_sentence_input)
+loss_layer = Lambda(lambda x: mean_squared_error(x[0], x[1]), output_shape=(1,))([eng_sentence_lstm, hindi_sentence_lstm])
 
-pdb.set_trace()
+model = Model(inputs=[eng_sentence_input, hindi_sentence_input], outputs=loss_layer)
 
-loss_layer = Lambda(lambda x, y: K.categorical_crossentropy(x, y), output_shape=(1,))(l_lstm_sent, l_lstm_sent1)
-
-model = Model(inputs=[sentence_input, sentence_input1], outputs=loss_layer)
-
-model.compile(loss='binary_crossentropy',
+model.compile(loss='mean_squared_error',
               optimizer='adamax',
               metrics=['acc'])
 
+pdb.set_trace()
 print("model fitting - Hierachical LSTM")
 print(model.summary())
 model.fit([h_train, e_train], y_train, validation_data=([h_val, e_val], y_val),
