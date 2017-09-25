@@ -7,9 +7,7 @@ from keras.layers import Input, Lambda
 from keras.layers import Embedding, LSTM, Bidirectional, TimeDistributed
 from keras.models import Model
 from keras.losses import mean_squared_error
-
-import gensim
-
+from keras.layers.merge import Concatenate
 from data_handler import text_from_json, break_in_subword, read_data
 import pdb
 
@@ -152,105 +150,90 @@ def get_embeddings_tokenizer(filename, EMBEDDING_DIM):
     return embedding_matrix, word_tokenizer
 
 
-################################################################################
-TRAIN_DATA_FILE = "data/train_data.json"
-TEST_DATA_FILE = "data/test_data.json"
+def create_model(EMBEDDING_DIM, MAX_WORD_LENGTH, MAX_SENT_LENGTH):
+    """Create model for alignment of word embeddings."""
+    word_lstm = Bidirectional(LSTM(EMBEDDING_DIM))
+    sentence_lstm = Bidirectional(LSTM(EMBEDDING_DIM))
+    # -------------------------------------------------------
+    # Hindi Pass
+    hindi_word_syllables = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
+    hindi_sentence_words = Input(shape=(MAX_SENT_LENGTH,), dtype='int64')
+    hindi_sentence_word_syll = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
 
-MAX_WORD_LENGTH = 5
-MAX_SENT_LENGTH = 60
-EMBEDDING_DIM = 100
-VALIDATION_SPLIT = 0.2
+    hindi_word_embedding_layer = Embedding(len(hindi_word_tokenizer.word_index),
+                                           EMBEDDING_DIM,
+                                           weights=[hindi_embedding_matrix],
+                                           input_length=EMBEDDING_DIM,
+                                           trainable=True)
 
-################################################################################
-# tokenizer = maptosubword([TRAIN_DATA_FILE, TEST_DATA_FILE])
-# print("Map created")
-#
-# train_texts = break_in_subword(text_from_json(TRAIN_DATA_FILE))
-# test_texts = break_in_subword(text_from_json(TEST_DATA_FILE))
-#
-# train_data = get_sequences(train_texts, MAX_SENT_LENGTH, MAX_WORD_LENGTH, tokenizer)
-# test_data = get_sequences(test_texts, MAX_SENT_LENGTH, MAX_WORD_LENGTH, tokenizer)
-# pdb.set_trace()
-# train_labels = get_labels(TRAIN_DATA_FILE)
-# test_labels = get_labels(TEST_DATA_FILE)
-#
-# print("Sequence created")
-#
-# x_train, y_train, x_val, y_val = split_validation(train_data, train_labels)
-#
-# del train_data
-# del train_labels
-#
-# print('Number of positive and negative tweets in training and validation set')
-# print (y_train.sum(axis=0))
-# print (y_val.sum(axis=0))
+    # Word model
+    hindi_word_lstm = word_lstm(hindi_word_syllables)
+    hindi_word_model = Model(hindi_word_syllables, hindi_word_lstm)
 
-hindi_embedding_matrix, hindi_word_tokenizer = get_embeddings_tokenizer("data/parallel.hi", EMBEDDING_DIM)
-eng_embedding_matrix, eng_word_tokenizer = get_embeddings_tokenizer("data/parallel.en", EMBEDDING_DIM)
+    hindi_word_embeddings = hindi_word_embedding_layer(hindi_sentence_words)
+    hindi_sentence = TimeDistributed(hindi_word_model)(hindi_sentence_word_syll)
 
-################################################################################
-word_lstm = Bidirectional(LSTM(100))
-sentence_lstm = Bidirectional(LSTM(100))
+    # Sentence Model
+    hindi_sentence_representation = Concatenate([hindi_word_embeddings, hindi_sentence])
+    hindi_sentence_lstm = sentence_lstm(hindi_sentence_representation)
 
+    # -------------------------------------------------------
+    # Egnlish Pass
 
-hindi_word_embedding_layer = Embedding(len(hindi_word_tokenizer.word_index),
-                                       EMBEDDING_DIM,
-                                       weights=[hindi_embedding_matrix],
-                                       input_length=EMBEDDING_DIM,
-                                       trainable=True)
-# Hindi Word model
-hindi_word_input = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
-hindi_word_embedding = hindi_word_embedding_layer(hindi_word_input)
-hindi_word_lstm = word_lstm(hindi_word_embedding)
-hindi_word_model = Model(hindi_word_input, hindi_word_lstm)
+    eng_word_syllables = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
+    eng_sentence_words = Input(shape=(MAX_SENT_LENGTH,), dtype='int64')
+    eng_sentence_word_syll = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
 
-# English Sentence model
-hindi_sentence_input = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
-hindi_sentence = TimeDistributed(hindi_word_model)(hindi_sentence_input)
-hindi_sentence_lstm = sentence_lstm(hindi_sentence)
+    eng_word_embedding_layer = Embedding(len(eng_word_tokenizer.word_index),
+                                         EMBEDDING_DIM,
+                                         weights=[eng_embedding_matrix],
+                                         input_length=EMBEDDING_DIM,
+                                         trainable=True)
 
-################################################################################
+    # Word model
+    eng_word_lstm = word_lstm(eng_word_syllables)
+    eng_word_model = Model(eng_word_syllables, eng_word_lstm)
 
-eng_word_embedding_layer = Embedding(len(eng_word_tokenizer.word_index),
-                                     EMBEDDING_DIM,
-                                     weights=[eng_embedding_matrix],
-                                     input_length=EMBEDDING_DIM,
-                                     trainable=True)
-# Hindi Word model
-eng_word_input = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
-eng_word_embedding = eng_word_embedding_layer(eng_word_input)
-eng_word_lstm = word_lstm(eng_word_embedding)
-eng_word_model = Model(eng_word_input, eng_word_lstm)
+    eng_word_embeddings = eng_word_embedding_layer(eng_sentence_words)
+    eng_sentence = TimeDistributed(eng_word_model)(eng_sentence_word_syll)
 
-# English Sentence model
-eng_sentence_input = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
-eng_sentence = TimeDistributed(eng_word_model)(eng_sentence_input)
-eng_sentence_lstm = sentence_lstm(eng_sentence)
+    # Sentence Model
+    eng_sentence_representation = Concatenate([eng_word_embeddings, eng_sentence])
+    eng_sentence_lstm = sentence_lstm(eng_sentence_representation)
 
-loss_layer = Lambda(lambda x: mean_squared_error(x[0], x[1]), output_shape=(1,))([eng_sentence_lstm, hindi_sentence_lstm])
+    loss_layer = Lambda(lambda x: mean_squared_error(x[0], x[1]), output_shape=(1,))([eng_sentence_lstm, hindi_sentence_lstm])
 
-model = Model(inputs=[eng_sentence_input, hindi_sentence_input], outputs=loss_layer)
+    model = Model(inputs=[eng_sentence_words, eng_sentence_word_syll, hindi_sentence_words, hindi_sentence_word_syll], outputs=loss_layer)
 
-model.compile(loss='mean_squared_error',
-              optimizer='adamax',
-              metrics=['acc'])
-
-pdb.set_trace()
-print("model fitting - Hierachical LSTM")
-print(model.summary())
-model.fit([h_train, e_train], y_train, validation_data=([h_val, e_val], y_val),
-          nb_epoch=20, batch_size=32)
-
-print("Evaluating model ...")
-score, accuracy = model.evaluate(test_data, test_labels, batch_size=32)
-print(score, accuracy)
+    return model
 
 
-# #############################
+if __name__ == "__main__":
+    TRAIN_DATA_FILE = "data/train_data.json"
+    TEST_DATA_FILE = "data/test_data.json"
 
+    MAX_WORD_LENGTH = 5
+    MAX_SENT_LENGTH = 20
+    EMBEDDING_DIM = 100
+    VALIDATION_SPLIT = 0.2
 
+    hindi_embedding_matrix, hindi_word_tokenizer = get_embeddings_tokenizer("data/parallel.hi", EMBEDDING_DIM)
+    eng_embedding_matrix, eng_word_tokenizer = get_embeddings_tokenizer("data/parallel.en", EMBEDDING_DIM)
 
+    _, hindi_syllable_tokenize = get_embeddings_tokenizer("data/parallel.hi.syll", EMBEDDING_DIM)
+    _, eng_syllable_tokenizer = get_embeddings_tokenizer("data/parallel.en.syll", EMBEDDING_DIM)
 
+    model = create_model(EMBEDDING_DIM, MAX_WORD_LENGTH, MAX_SENT_LENGTH)
+    pdb.set_trace()
+    model.compile(loss='mean_squared_error',
+                  optimizer='adamax',
+                  metrics=['acc'])
 
-
-# #############################
+    # print("model fitting - Hierachical LSTM")
+    # print(model.summary())
+    # model.fit([h_train, e_train], y_train, validation_data=([h_val, e_val], y_val),
+    #           nb_epoch=20, batch_size=32)
+    #
+    # print("Evaluating model ...")
+    # score, accuracy = model.evaluate(test_data, test_labels, batch_size=32)
+    # print(score, accuracy)
