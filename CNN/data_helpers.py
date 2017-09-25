@@ -39,11 +39,11 @@ def load_data_and_labels(data_file):
     for instance in data:
 
         if instance["sentiment"] == -1:
-            y.append([0,0,1.0])
+            y.append([0, 0, 1.0])
         elif instance["sentiment"] == 0:
-            y.append([0,1.0,0])
+            y.append([0, 1.0, 0])
         elif instance["sentiment"] == 1:
-            y.append([1.0,0,0])
+            y.append([1.0, 0, 0])
         else:
             continue
         x_text.append(clean_str(instance["text"]))

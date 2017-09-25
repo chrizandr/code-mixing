@@ -196,17 +196,17 @@ with tf.Graph().as_default():
             train_summary_writer.add_summary(summaries, step)
             return loss, accuracy
 
-        def dev_step(x_dev, y_dev, batch_size=50):
+        def dev_step(X, labels, batch_size=50):
             """
             Evaluates model on a dev set
             """
-            batch_num = int(len(x_dev) / batch_size)
+            batch_num = int(len(X) / batch_size)
             validation_accuracy = 0
             prev = 0
             predicted_vector = []
             for i in range(batch_num):
-                x_dev_batch = x_dev[prev:prev+batch_size]
-                y_dev_batch = y_dev[prev:prev+batch_size]
+                x_dev_batch = X[prev:prev+batch_size]
+                y_dev_batch = labels[prev:prev+batch_size]
                 prev += batch_size
                 pred_list, test_acc = sess.run(
                     [cnn.predictions, cnn.accuracy],
@@ -217,19 +217,19 @@ with tf.Graph().as_default():
                 validation_accuracy += test_acc
                 predicted_vector.extend(list(pred_list))
             validation_accuracy /= batch_num
-            print("validation accuracy %g"%validation_accuracy)
+            print("validation accuracy %g" % validation_accuracy)
 
-        def test_step(x_test, y_test, batch_size=50):
+        def test_step(X, labels, batch_size=50):
             """
             Evaluates model on a test set
             """
-            batch_num = int(len(x_dev) / batch_size)
+            batch_num = int(len(X) / batch_size)
             testing_accuracy = 0
             prev = 0
             predicted_vector = []
             for i in range(batch_num):
-                x_dev_batch = x_dev[prev:prev+batch_size]
-                y_dev_batch = y_dev[prev:prev+batch_size]
+                x_dev_batch = X[prev:prev+batch_size]
+                y_dev_batch = labels[prev:prev+batch_size]
                 prev += batch_size
                 pred_list, test_acc = sess.run(
                     [cnn.predictions, cnn.accuracy],
@@ -240,8 +240,8 @@ with tf.Graph().as_default():
                 testing_accuracy += test_acc
                 predicted_vector.extend(list(pred_list))
             testing_accuracy /= batch_num
-            pickle.dump(pred_list, open("{}".format(sys.argv[2]),"wb"))
-            print("Testing accuracy %g"%testing_accuracy)
+            pickle.dump(predicted_vector, open("{}".format(sys.argv[2]), "wb"))
+            print("Testing accuracy %g" % testing_accuracy)
 
         def batch_iter(data, batch_size, num_epochs, shuffle=True):
             """
@@ -281,7 +281,7 @@ with tf.Graph().as_default():
                 suffix='loss: {}, acc: {}, Complete'.format(train_loss, train_acc),
                 length=50)
 
-        def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█'):
+        def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '>'):
             """
             Call in a loop to create terminal progress bar
             @params:
