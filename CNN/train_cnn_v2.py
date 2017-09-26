@@ -227,7 +227,7 @@ with tf.Graph().as_default():
             testing_accuracy = 0
             prev = 0
             predicted_vector = []
-            for i in range(batch_num):
+            for i in range(batch_num+1):
                 x_dev_batch = X[prev:prev+batch_size]
                 y_dev_batch = labels[prev:prev+batch_size]
                 prev += batch_size
@@ -239,6 +239,10 @@ with tf.Graph().as_default():
                         cnn.dropout_keep_prob: 1.0})
                 testing_accuracy += test_acc
                 predicted_vector.extend(list(pred_list))
+
+                if i == (batch_num-1):
+                    batch_size = int(len(X) % batch_size)
+
             testing_accuracy /= batch_num
             pickle.dump(predicted_vector, open("{}".format(sys.argv[2]), "wb"))
             print("Testing accuracy %g" % testing_accuracy)

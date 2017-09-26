@@ -227,7 +227,7 @@ with tf.Graph().as_default():
             testing_accuracy = 0
             prev = 0
             predicted_vector = []
-            for i in range(batch_num):
+            for i in range(batch_num+1):
                 x_dev_batch = X[prev:prev+batch_size]
                 y_dev_batch = labels[prev:prev+batch_size]
                 prev += batch_size
@@ -239,6 +239,10 @@ with tf.Graph().as_default():
                         cnn.dropout_keep_prob: 1.0})
                 testing_accuracy += test_acc
                 predicted_vector.extend(list(pred_list))
+
+                if i == (batch_num-1):
+                    batch_size = int(len(X) % batch_size)
+
             testing_accuracy /= batch_num
             pickle.dump(predicted_vector, open("{}".format(sys.argv[2]), "wb"))
             print("Testing accuracy %g" % testing_accuracy)
@@ -281,7 +285,7 @@ with tf.Graph().as_default():
                 suffix='loss: {}, acc: {}, Complete'.format(train_loss, train_acc),
                 length=50)
 
-        def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '>'):
+        def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='>'):
             """
             Call in a loop to create terminal progress bar
             @params:
@@ -296,7 +300,7 @@ with tf.Graph().as_default():
             percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
             filledLength = int(length * iteration // total)
             bar = fill * filledLength + '-' * (length - filledLength)
-            print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end = '\r')
+            print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end='\r')
             # Print New Line on Complete
             if iteration == total:
                 print()
