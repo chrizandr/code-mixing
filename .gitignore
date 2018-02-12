@@ -5,6 +5,7 @@
 *.json
 *.mdl
 *.out
+*.zip
 data/
 resources/
 venv/

@@ -8,46 +8,17 @@ from keras.layers import Embedding, LSTM, Bidirectional, TimeDistributed
 from keras.models import Model
 from keras.losses import mean_squared_error
 from keras.layers.merge import Concatenate
-from data_handler import text_from_json, break_in_subword, read_data
+from data_handler import text_from_json, break_in_subword, read_data, clean_str
 import pdb
 
 
-def maptosubword(files):
-    """Create a map of indices for subwords."""
-    texts = []
+def read_layered_subword(filename):
+    """Read data as subwords."""
+    text_data = read_data(filename)
 
-    for f in files:
-        text_data = text_from_json(f)
-        f_text = break_in_subword(text_data)
-        for x in f_text:
-            temp = []
-            for y in x:
-                temp.extend(y)
-            texts.append(str(' '.join(temp)))
+    text_layered = break_in_subword(text_data)
 
-    tokenizer = Tokenizer(filters='!"#$%&()*+,-./:;=?@[\\]^_`{|}~\t\n')
-    tokenizer.fit_on_texts(texts)
-
-    tokenizer.word_index['<<SPAD>>'] = len(tokenizer.word_index) + 1
-
-    return tokenizer
-
-
-def maptoword(files):
-    """Create a map of indices for words."""
-    texts = []
-
-    for f in files:
-        text_data = text_from_json(f)
-        _, f_text = break_in_subword(text_data, add_word=True)
-        for x in f_text:
-            texts.append(' '.join(x))
-
-    texts.append(['<<WPAD>>'])
-    tokenizer = Tokenizer()
-    tokenizer.fit_on_texts(texts)
-
-    return tokenizer
+    return text_layered
 
 
 def get_labels(f):
@@ -112,7 +83,7 @@ def get_sequences(texts, max_slen, max_wlen, tokenizer):
                 if len(texts[i][j]) > max_wlen:
                     n_owords += 1
                 for k in range(len(texts[i][j])):
-                    if k < MAX_WORD_LENGTH:
+                    if k < max_wlen:
                         if texts[i][j][k] in tokenizer.word_index:
                             data[i][j][k] = tokenizer.word_index[texts[i][j][k]]
                         else:
@@ -129,12 +100,12 @@ def get_sequences(texts, max_slen, max_wlen, tokenizer):
     return data
 
 
-def get_embeddings_tokenizer(filename, EMBEDDING_DIM):
+def get_embeddings_tokenizer(filename1, filename2, EMBEDDING_DIM):
     """Get the embeddings and the tokenizer for words."""
-    data = read_data(filename)
+    data = read_data(filename1) + read_data(filename2)
     texts = []
 
-    embedding_matrix = np.random.randn(len(data), EMBEDDING_DIM)
+    embedding_matrix = np.zeros((len(data)+1, EMBEDDING_DIM))
     embedding_matrix = embedding_matrix.astype(np.float64)
     for i in range(len(data)):
         raw = data[i].split()
@@ -150,7 +121,7 @@ def get_embeddings_tokenizer(filename, EMBEDDING_DIM):
     return embedding_matrix, word_tokenizer
 
 
-def create_model(EMBEDDING_DIM, MAX_WORD_LENGTH, MAX_SENT_LENGTH):
+def create_model(EMBEDDING_DIM, MAX_WORD_LENGTH, MAX_SENT_LENGTH, NUM_SUBWORDS, subword_embeddings):
     """Create model for alignment of word embeddings."""
     word_lstm = Bidirectional(LSTM(EMBEDDING_DIM))
     sentence_lstm = Bidirectional(LSTM(EMBEDDING_DIM))
@@ -160,17 +131,17 @@ def create_model(EMBEDDING_DIM, MAX_WORD_LENGTH, MAX_SENT_LENGTH):
     hindi_sentence_words = Input(shape=(MAX_SENT_LENGTH,), dtype='int64')
     hindi_sentence_word_syll = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
 
-    hindi_word_embedding_layer = Embedding(len(hindi_word_tokenizer.word_index),
-                                           EMBEDDING_DIM,
-                                           weights=[hindi_embedding_matrix],
-                                           input_length=EMBEDDING_DIM,
-                                           trainable=True)
+    subword_embedding_layer = Embedding(NUM_SUBWORDS,
+                                        EMBEDDING_DIM,
+                                        weights=[subword_embeddings],
+                                        input_length=EMBEDDING_DIM,
+                                        trainable=True)
 
     # Word model
     hindi_word_lstm = word_lstm(hindi_word_syllables)
     hindi_word_model = Model(hindi_word_syllables, hindi_word_lstm)
 
-    hindi_word_embeddings = hindi_word_embedding_layer(hindi_sentence_words)
+    hindi_subword_embeddings = subword_embedding_layer(hindi_sentence_words)
     hindi_sentence = TimeDistributed(hindi_word_model)(hindi_sentence_word_syll)
 
     # Sentence Model
@@ -217,11 +188,14 @@ if __name__ == "__main__":
     EMBEDDING_DIM = 100
     VALIDATION_SPLIT = 0.2
 
-    hindi_embedding_matrix, hindi_word_tokenizer = get_embeddings_tokenizer("data/parallel.hi", EMBEDDING_DIM)
-    eng_embedding_matrix, eng_word_tokenizer = get_embeddings_tokenizer("data/parallel.en", EMBEDDING_DIM)
+    _, word_tokenizer = get_embeddings_tokenizer("data/parallel.hi", "data/parallel.en", EMBEDDING_DIM)
+    subword_embeddings, subword_tokenizer = get_embeddings_tokenizer("data/parallel.hi.syll", "data/parallel.hi.syll", EMBEDDING_DIM)
 
-    _, hindi_syllable_tokenize = get_embeddings_tokenizer("data/parallel.hi.syll", EMBEDDING_DIM)
-    _, eng_syllable_tokenizer = get_embeddings_tokenizer("data/parallel.en.syll", EMBEDDING_DIM)
+    layered_data_e = read_layered_subword("data/IITB.en-hi.en")
+    layered_data_h = read_layered_subword("data/IITB.en-hi.hi")
+
+    h_sequences = get_sequences(layered_data_h, MAX_SENT_LENGTH, MAX_WORD_LENGTH, subword_tokenizer)
+    e_sequences = get_sequences(layered_data_e, MAX_SENT_LENGTH, MAX_WORD_LENGTH, subword_tokenizer)
 
     model = create_model(EMBEDDING_DIM, MAX_WORD_LENGTH, MAX_SENT_LENGTH)
     pdb.set_trace()

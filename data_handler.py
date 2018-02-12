@@ -21,15 +21,21 @@ def construct_sentence(sentence):
     return SW
 
 
-def read_data(filename, encoding="ASCII"):
+def read_data(filename, encoding="ASCII", clean=True, split=False):
     """Read sentences from the file."""
     f = open(filename, "r")
     data = list()
     for line in f:
         if encoding == "UNI":
-            data.append(line.decode('utf-8'))
+            d = line.decode('utf-8')
         else:
-            data.append(line)
+            d = line
+        if clean:
+            d = clean_str(d)
+        if split:
+            d = d.split()
+
+        data.append(d)
 
     return data
 
