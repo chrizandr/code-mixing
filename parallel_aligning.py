@@ -4,12 +4,10 @@ import numpy as np
 import json
 from keras.preprocessing.text import Tokenizer
 from keras.layers import Input, Lambda
-from keras.layers import Embedding, LSTM, Bidirectional, TimeDistributed
+from keras.layers import Embedding, LSTM, Bidirectional, TimeDistributed, Dense, Add, Subtract, Multiply
 from keras.models import Model
-from keras.losses import mean_squared_error
-from keras.layers.merge import Concatenate
-from data_handler import text_from_json, break_in_subword, read_data, clean_str
-import pdb
+from keras import backend as K
+from data_handler import break_in_subword, read_data
 
 
 def read_layered_subword(filename):
@@ -127,54 +125,39 @@ def create_model(EMBEDDING_DIM, MAX_WORD_LENGTH, MAX_SENT_LENGTH, NUM_SUBWORDS, 
     sentence_lstm = Bidirectional(LSTM(EMBEDDING_DIM))
     # -------------------------------------------------------
     # Hindi Pass
-    hindi_word_syllables = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
-    hindi_sentence_words = Input(shape=(MAX_SENT_LENGTH,), dtype='int64')
-    hindi_sentence_word_syll = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
+    hindi_sentence = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
+    eng_sentence = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
 
     subword_embedding_layer = Embedding(NUM_SUBWORDS,
                                         EMBEDDING_DIM,
                                         weights=[subword_embeddings],
-                                        input_length=EMBEDDING_DIM,
+                                        input_length=MAX_WORD_LENGTH,
                                         trainable=True)
 
     # Word model
-    hindi_word_lstm = word_lstm(hindi_word_syllables)
-    hindi_word_model = Model(hindi_word_syllables, hindi_word_lstm)
+    hindi_word_embeddings = TimeDistributed(subword_embedding_layer)(hindi_sentence)
+    hindi_word_out = TimeDistributed(word_lstm)(hindi_word_embeddings)
+    hindi_sentence_out = sentence_lstm(hindi_word_out)
 
-    hindi_subword_embeddings = subword_embedding_layer(hindi_sentence_words)
-    hindi_sentence = TimeDistributed(hindi_word_model)(hindi_sentence_word_syll)
+    eng_word_embeddings = TimeDistributed(subword_embedding_layer)(eng_sentence)
+    eng_word_out = TimeDistributed(word_lstm)(eng_word_embeddings)
+    eng_sentence_out = sentence_lstm(eng_word_out)
 
-    # Sentence Model
-    hindi_sentence_representation = Concatenate([hindi_word_embeddings, hindi_sentence])
-    hindi_sentence_lstm = sentence_lstm(hindi_sentence_representation)
+    sentence_diff = Subtract()([hindi_sentence_out, eng_sentence_out])
+    sentence_norm = Multiply()([sentence_diff, sentence_diff])
+    sentence_loss = Dense(2*EMBEDDING_DIM)(sentence_norm)
 
-    # -------------------------------------------------------
-    # Egnlish Pass
+    word_diff = Subtract()([hindi_word_out, eng_word_out])
+    word_norm = Multiply()([word_diff, word_diff])
+    norm_sum = Lambda(lambda x: K.sum(x, axis=1), output_shape=lambda s: (s[0], s[2]))(word_norm)
+    word_loss = Dense(2*EMBEDDING_DIM)(norm_sum)
 
-    eng_word_syllables = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
-    eng_sentence_words = Input(shape=(MAX_SENT_LENGTH,), dtype='int64')
-    eng_sentence_word_syll = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
+    total_loss = Add()([word_loss, sentence_loss])
 
-    eng_word_embedding_layer = Embedding(len(eng_word_tokenizer.word_index),
-                                         EMBEDDING_DIM,
-                                         weights=[eng_embedding_matrix],
-                                         input_length=EMBEDDING_DIM,
-                                         trainable=True)
-
-    # Word model
-    eng_word_lstm = word_lstm(eng_word_syllables)
-    eng_word_model = Model(eng_word_syllables, eng_word_lstm)
-
-    eng_word_embeddings = eng_word_embedding_layer(eng_sentence_words)
-    eng_sentence = TimeDistributed(eng_word_model)(eng_sentence_word_syll)
-
-    # Sentence Model
-    eng_sentence_representation = Concatenate([eng_word_embeddings, eng_sentence])
-    eng_sentence_lstm = sentence_lstm(eng_sentence_representation)
-
-    loss_layer = Lambda(lambda x: mean_squared_error(x[0], x[1]), output_shape=(1,))([eng_sentence_lstm, hindi_sentence_lstm])
-
-    model = Model(inputs=[eng_sentence_words, eng_sentence_word_syll, hindi_sentence_words, hindi_sentence_word_syll], outputs=loss_layer)
+    model = Model(inputs=[hindi_sentence, eng_sentence], outputs=total_loss)
+    model.compile(loss='mean_squared_error',
+                  optimizer='adamax',
+                  metrics=['acc'])
 
     return model
 
@@ -188,8 +171,10 @@ if __name__ == "__main__":
     EMBEDDING_DIM = 100
     VALIDATION_SPLIT = 0.2
 
-    _, word_tokenizer = get_embeddings_tokenizer("data/parallel.hi", "data/parallel.en", EMBEDDING_DIM)
-    subword_embeddings, subword_tokenizer = get_embeddings_tokenizer("data/parallel.hi.syll", "data/parallel.hi.syll", EMBEDDING_DIM)
+    # _, word_tokenizer = get_embeddings_tokenizer("data/parallel.hi", "data/parallel.en", EMBEDDING_DIM)
+    subword_embeddings, subword_tokenizer = get_embeddings_tokenizer("data/parallel.hi.syll",
+                                                                     "data/parallel.hi.syll",
+                                                                     EMBEDDING_DIM)
 
     layered_data_e = read_layered_subword("data/IITB.en-hi.en")
     layered_data_h = read_layered_subword("data/IITB.en-hi.hi")
@@ -197,17 +182,21 @@ if __name__ == "__main__":
     h_sequences = get_sequences(layered_data_h, MAX_SENT_LENGTH, MAX_WORD_LENGTH, subword_tokenizer)
     e_sequences = get_sequences(layered_data_e, MAX_SENT_LENGTH, MAX_WORD_LENGTH, subword_tokenizer)
 
-    model = create_model(EMBEDDING_DIM, MAX_WORD_LENGTH, MAX_SENT_LENGTH)
-    pdb.set_trace()
-    model.compile(loss='mean_squared_error',
-                  optimizer='adamax',
-                  metrics=['acc'])
+    split_point = int(h_sequences.shape[0]*VALIDATION_SPLIT)
 
-    # print("model fitting - Hierachical LSTM")
-    # print(model.summary())
-    # model.fit([h_train, e_train], y_train, validation_data=([h_val, e_val], y_val),
-    #           nb_epoch=20, batch_size=32)
-    #
-    # print("Evaluating model ...")
-    # score, accuracy = model.evaluate(test_data, test_labels, batch_size=32)
-    # print(score, accuracy)
+    hx_train = h_sequences[0:split_point]
+    ex_train = e_sequences[0:split_point]
+    y_train = np.zeros(hx_train.shape[0], 2*EMBEDDING_DIM)
+
+    hx_val = h_sequences[split_point:]
+    ex_val = e_sequences[split_point:]
+    y_val = np.zeros(hx_val.shape[0], 2*EMBEDDING_DIM)
+
+    model = create_model(EMBEDDING_DIM, MAX_WORD_LENGTH,
+                         MAX_SENT_LENGTH, len(subword_tokenizer.word_index),
+                         subword_embeddings)
+
+    print("model fitting - Hierachical LSTM")
+    print(model.summary())
+    model.fit([hx_train, ex_train], y_train, validation_data=([hx_val, ex_val], y_val),
+              nb_epoch=20, batch_size=32)
