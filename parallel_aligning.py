@@ -6,6 +6,7 @@ from keras.preprocessing.text import Tokenizer
 from keras.layers import Input, Lambda
 from keras.layers import Embedding, LSTM, Bidirectional, TimeDistributed, Dense, Add, Subtract, Multiply
 from keras.models import Model
+from keras.callbacks import ModelCheckpoint
 from keras import backend as K
 from data_handler import break_in_subword, read_data
 
@@ -165,11 +166,14 @@ def create_model(EMBEDDING_DIM, MAX_WORD_LENGTH, MAX_SENT_LENGTH, NUM_SUBWORDS, 
 if __name__ == "__main__":
     TRAIN_DATA_FILE = "data/train_data.json"
     TEST_DATA_FILE = "data/test_data.json"
+    MODEL_FILE = "parallel_aligning.hd5"
 
     MAX_WORD_LENGTH = 5
     MAX_SENT_LENGTH = 20
     EMBEDDING_DIM = 100
     VALIDATION_SPLIT = 0.2
+
+    checkpoint = ModelCheckpoint(filepath=MODEL_FILE, monitor='val_loss')
 
     # _, word_tokenizer = get_embeddings_tokenizer("data/parallel.hi", "data/parallel.en", EMBEDDING_DIM)
     subword_embeddings, subword_tokenizer = get_embeddings_tokenizer("data/parallel.hi.syll",
@@ -199,4 +203,4 @@ if __name__ == "__main__":
     print("model fitting - Hierachical LSTM")
     print(model.summary())
     model.fit([hx_train, ex_train], y_train, validation_data=([hx_val, ex_val], y_val),
-              nb_epoch=20, batch_size=32)
+              epoch=20, batch_size=32, callbacks=[checkpoint])
