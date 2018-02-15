@@ -5,7 +5,7 @@ import pdb
 import json
 from keras.preprocessing.text import Tokenizer
 from keras.layers import Input, Lambda
-from keras.layers import Embedding, LSTM, Bidirectional, TimeDistributed, Dense, Add, Subtract, Dot
+from keras.layers import Embedding, LSTM, Bidirectional, TimeDistributed, Dense, Add, Subtract, Dot, Activation
 from keras.models import Model
 from keras.callbacks import ModelCheckpoint
 from keras import backend as K
@@ -102,7 +102,7 @@ def get_sequences(texts, max_slen, max_wlen, tokenizer):
 
 def get_embeddings_tokenizer(filename1, filename2, EMBEDDING_DIM):
     """Get the embeddings and the tokenizer for words."""
-    data = read_data(filename1)[1:] + read_data(filename2)[1:]
+    data = read_data(filename1, clean=False)[1:] + read_data(filename2, clean=False)[1:]
     texts = []
 
     for d in data:
@@ -156,10 +156,12 @@ def create_model(EMBEDDING_DIM, MAX_WORD_LENGTH, MAX_SENT_LENGTH, NUM_SUBWORDS, 
     hindi_word_embeddings = TimeDistributed(subword_embedding_layer)(hindi_sentence)
     hindi_word_out = TimeDistributed(word_lstm)(hindi_word_embeddings)
     hindi_sentence_out = sentence_lstm(hindi_word_out)
+    hindi_sentence_out = Activation('softmax')(hindi_sentence_out)
 
     eng_word_embeddings = TimeDistributed(subword_embedding_layer)(eng_sentence)
     eng_word_out = TimeDistributed(word_lstm)(eng_word_embeddings)
     eng_sentence_out = sentence_lstm(eng_word_out)
+    eng_sentence_out = Activation('softmax')(eng_sentence_out)
 
     sentence_diff = Subtract()([hindi_sentence_out, eng_sentence_out])
     norm_sentence = Dot(axes=1)([sentence_diff, sentence_diff])
@@ -194,7 +196,7 @@ if __name__ == "__main__":
     MAX_WORD_LENGTH = 5
     MAX_SENT_LENGTH = 20
     EMBEDDING_DIM = 100
-    VALIDATION_SPLIT = 0.2
+    VALIDATION_SPLIT = 0.8
 
     checkpoint = ModelCheckpoint(filepath=MODEL_FILE, monitor='val_loss')
 
@@ -205,9 +207,11 @@ if __name__ == "__main__":
     layered_data_e = read_layered_subword("data/IITB.en-hi.en")
     layered_data_h = read_layered_subword("data/IITB.en-hi.hi.roman.clean")
 
+    print("Gen hindi sequence")
     h_sequences = get_sequences(layered_data_h, MAX_SENT_LENGTH, MAX_WORD_LENGTH, subword_tokenizer)
+    print("Gen eng sequence")
     e_sequences = get_sequences(layered_data_e, MAX_SENT_LENGTH, MAX_WORD_LENGTH, subword_tokenizer)
-
+    pdb.set_trace()
     split_point = int(h_sequences.shape[0]*VALIDATION_SPLIT)
 
     hx_train = h_sequences[0:split_point]
