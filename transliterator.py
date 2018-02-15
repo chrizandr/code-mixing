@@ -3,7 +3,7 @@
 
 """Devanagiri to roman text convertor."""
 
-from data_handler import read_data, write_data, printProgressBar
+from data_handler import read_data, write_data
 import sys
 # The path to the local git repo for Indic NLP library
 INDIC_NLP_LIB_HOME = "/home/chrizandr/code-mixing/resources/indic_nlp_library"
@@ -27,8 +27,13 @@ def transliterate(data, lang):
     total = len(data)
     new_data = list()
     for i in range(len(data)):
-        printProgressBar(i+1, total, prefix='Progress:', suffix='Complete', length=50)
-        new_data.append(ItransTransliterator.to_itrans(data[i], LANG))
+        print(i, len(data))
+        # printProgressBar(i+1, total, prefix='Progress:', suffix='Complete', length=50)
+        try:
+            new_data.append(ItransTransliterator.to_itrans(data[i], LANG))
+        except IndexError:
+            print(data[i])
+
 
     return new_data
 
@@ -38,9 +43,8 @@ if __name__ == "__main__":
     INPUT_FILE = "/home/chrizandr/code-mixing/data/IITB.en-hi.hi"
     OUTPUT_FILE = "/home/chrizandr/code-mixing/data/IITB.en-hi.hi.roman"
     print("Reading data")
-    original_text = read_data(INPUT_FILE, encoding="UNI")
+    original_text = read_data(INPUT_FILE, encoding="UNI", clean=False)
     print("Transliterating")
     romanized_text = transliterate(original_text, LANG)
     print("Writing to file")
     write_data(OUTPUT_FILE, romanized_text, encoding="UNI")
- 

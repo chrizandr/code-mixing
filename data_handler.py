@@ -146,7 +146,7 @@ def break_in_subword(data, add_word=False, sentences=False):
         printProgressBar(i+1, total, prefix='Progress:', suffix='Complete', length=50)
         i += 1
         text = ' '.join(re.sub("(@[A-Za-z0-9]+)|([^0-9A-Za-z \t])|(\w+:\/\/\S+)", " ", text).split())
-        cleaned_text = clean_str(text)
+        cleaned_text = text
         splitted_text = cleaned_text.split()
         joined_text = []
         word_list = []

@@ -102,21 +102,34 @@ def get_sequences(texts, max_slen, max_wlen, tokenizer):
 
 def get_embeddings_tokenizer(filename1, filename2, EMBEDDING_DIM):
     """Get the embeddings and the tokenizer for words."""
-    data = read_data(filename1) + read_data(filename2)
+    data = read_data(filename1)[1:] + read_data(filename2)[1:]
     texts = []
 
-    embedding_matrix = np.zeros((len(data)+1, EMBEDDING_DIM))
-    embedding_matrix = embedding_matrix.astype(np.float64)
-    for i in range(len(data)):
-        raw = data[i].split()
-        label = raw[0]
-        vector = [float(x) for x in raw[1:EMBEDDING_DIM+1]]
-        texts.append(label)
-        embedding_matrix[i] = vector
+    for d in data:
+        raw = d.split()
+        texts.append(raw[0])
 
     word_tokenizer = Tokenizer()
     word_tokenizer.fit_on_texts(texts)
     word_tokenizer.word_index['<<SPAD>>'] = len(word_tokenizer.word_index) + 1
+    word_visit = [0 for i in range(len(word_tokenizer.word_index) + 1)]
+
+    embedding_matrix = np.random.random((len(word_tokenizer.word_index)+1, EMBEDDING_DIM))
+    embedding_matrix = embedding_matrix.astype(np.float64)
+
+    for d in data:
+        raw = d.split()
+        label = raw[0]
+
+        word_index = word_tokenizer.word_index[label]
+
+        if word_visit[word_index] == 0:
+            vector = [float(x) for x in raw[1:EMBEDDING_DIM+1]]
+            word_visit[word_index] = 1
+        else:
+            vector = (embedding_matrix[word_index] + np.array([float(x) for x in raw[1:EMBEDDING_DIM+1]]))/2
+
+        embedding_matrix[word_index] = vector
 
     return embedding_matrix, word_tokenizer
 
@@ -132,7 +145,7 @@ def create_model(EMBEDDING_DIM, MAX_WORD_LENGTH, MAX_SENT_LENGTH, NUM_SUBWORDS, 
     # hindi_aligned = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
     # eng_aligned = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
 
-    subword_embedding_layer = Embedding(NUM_SUBWORDS,
+    subword_embedding_layer = Embedding(NUM_SUBWORDS+1,
                                         EMBEDDING_DIM,
                                         weights=[subword_embeddings],
                                         input_length=MAX_WORD_LENGTH,
@@ -186,11 +199,11 @@ if __name__ == "__main__":
     checkpoint = ModelCheckpoint(filepath=MODEL_FILE, monitor='val_loss')
 
     # _, word_tokenizer = get_embeddings_tokenizer("data/parallel.hi", "data/parallel.en", EMBEDDING_DIM)
-    subword_embeddings, subword_tokenizer = get_embeddings_tokenizer("data/parallel.hi.syll",
+    subword_embeddings, subword_tokenizer = get_embeddings_tokenizer("data/parallel.en.syll",
                                                                      "data/parallel.hi.syll",
                                                                      EMBEDDING_DIM)
     layered_data_e = read_layered_subword("data/IITB.en-hi.en")
-    layered_data_h = read_layered_subword("data/IITB.en-hi.hi")
+    layered_data_h = read_layered_subword("data/IITB.en-hi.hi.roman.clean")
 
     h_sequences = get_sequences(layered_data_h, MAX_SENT_LENGTH, MAX_WORD_LENGTH, subword_tokenizer)
     e_sequences = get_sequences(layered_data_e, MAX_SENT_LENGTH, MAX_WORD_LENGTH, subword_tokenizer)
