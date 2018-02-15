@@ -205,9 +205,9 @@ if __name__ == "__main__":
                                                                      "data/parallel.hi.syll",
                                                                      EMBEDDING_DIM)
     print("Layered english data")
-    layered_data_e = read_layered_subword("data/IITB.en-hi.en.min")
+    layered_data_e = read_layered_subword("data/IITB.en-hi.en")
     print("Layered hindi data")
-    layered_data_h = read_layered_subword("data/IITB.en-hi.hi.min")
+    layered_data_h = read_layered_subword("data/IITB.en-hi.hi.roman.clean")
 
     print("Gen hindi sequence")
     h_sequences = get_sequences(layered_data_h, MAX_SENT_LENGTH, MAX_WORD_LENGTH, subword_tokenizer)
