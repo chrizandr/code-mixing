@@ -122,20 +122,21 @@ def get_embeddings_tokenizer(filename1, filename2, EMBEDDING_DIM):
 
 def create_model(EMBEDDING_DIM, MAX_WORD_LENGTH, MAX_SENT_LENGTH, NUM_SUBWORDS, subword_embeddings):
     """Create model for alignment of word embeddings."""
-    word_lstm = Bidirectional(LSTM(EMBEDDING_DIM))
-    sentence_lstm = Bidirectional(LSTM(EMBEDDING_DIM))
+    word_lstm = Bidirectional(LSTM(EMBEDDING_DIM), name="word_lstm")
+    sentence_lstm = Bidirectional(LSTM(EMBEDDING_DIM), name="sentence_lstm")
     # -------------------------------------------------------
     # Hindi Pass
     hindi_sentence = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
     eng_sentence = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
-    hindi_aligned = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
-    eng_aligned = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
+    # hindi_aligned = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
+    # eng_aligned = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
 
     subword_embedding_layer = Embedding(NUM_SUBWORDS,
                                         EMBEDDING_DIM,
                                         weights=[subword_embeddings],
                                         input_length=MAX_WORD_LENGTH,
-                                        trainable=True)
+                                        trainable=True,
+                                        name="subword_embedding")
 
     # Word model
     hindi_word_embeddings = TimeDistributed(subword_embedding_layer)(hindi_sentence)
@@ -149,21 +150,21 @@ def create_model(EMBEDDING_DIM, MAX_WORD_LENGTH, MAX_SENT_LENGTH, NUM_SUBWORDS, 
     sentence_diff = Subtract()([hindi_sentence_out, eng_sentence_out])
     sentence_square = Multiply()([sentence_diff, sentence_diff])
     norm_sentence = Lambda(lambda x: K.sum(x), output_shape=lambda s: (s[0], 1))(sentence_square)
-    sentence_loss = Dense(1)(norm_sentence)
+    sentence_loss = Dense(1, name="alpha1")(norm_sentence)
 
-    hindi_aligned_embeddings = subword_embedding_layer(hindi_aligned)
-    eng_aligned_embeddings = subword_embedding_layer(eng_aligned)
-    hindi_aligned_out = word_lstm(hindi_aligned_embeddings)
-    eng_aligned_out = word_lstm(eng_aligned_embeddings)
+    # hindi_aligned_embeddings = subword_embedding_layer(hindi_aligned)
+    # eng_aligned_embeddings = subword_embedding_layer(eng_aligned)
+    # hindi_aligned_out = word_lstm(hindi_aligned_embeddings)
+    # eng_aligned_out = word_lstm(eng_aligned_embeddings)
 
-    word_diff = Subtract()([hindi_aligned_out, eng_aligned_out])
-    word_square = Multiply()([word_diff, word_diff])
-    norm_word = Lambda(lambda x: K.sum(x), output_shape=lambda s: (s[0], 1))(word_square)
-    word_loss = Dense(1)(norm_word)
+    # word_diff = Subtract()([hindi_aligned_out, eng_aligned_out])
+    # word_square = Multiply()([word_diff, word_diff])
+    # norm_word = Lambda(lambda x: K.sum(x), output_shape=lambda s: (s[0], 1))(word_square)
+    # word_loss = Dense(1, name="alpha2")(norm_word)
 
-    total_loss = Add()([word_loss, sentence_loss])
+    # total_loss = Add()([word_loss, sentence_loss])
 
-    model = Model(inputs=[hindi_sentence, eng_sentence], outputs=total_loss)
+    model = Model(inputs=[hindi_sentence, eng_sentence], outputs=sentence_loss)
     model.compile(loss='mean_squared_error',
                   optimizer='adamax',
                   metrics=['acc'])
