@@ -199,11 +199,11 @@ if __name__ == "__main__":
 
     hx_train = h_sequences[0:split_point]
     ex_train = e_sequences[0:split_point]
-    y_train = np.zeros(hx_train.shape[0], 2*EMBEDDING_DIM)
+    y_train = np.zeros((hx_train.shape[0], 1))
 
     hx_val = h_sequences[split_point:]
     ex_val = e_sequences[split_point:]
-    y_val = np.zeros(hx_val.shape[0], 2*EMBEDDING_DIM)
+    y_val = np.zeros((hx_val.shape[0], 1))
 
     model = create_model(EMBEDDING_DIM, MAX_WORD_LENGTH,
                          MAX_SENT_LENGTH, len(subword_tokenizer.word_index),
