@@ -213,4 +213,4 @@ if __name__ == "__main__":
     print("model fitting - Hierachical LSTM")
     print(model.summary())
     model.fit([hx_train, ex_train], y_train, validation_data=([hx_val, ex_val], y_val),
-              epoch=20, batch_size=32, callbacks=[checkpoint])
+              epochs=20, batch_size=32, callbacks=[checkpoint])
