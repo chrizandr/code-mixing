@@ -14,7 +14,7 @@ from data_handler import break_in_subword, read_data
 
 def read_layered_subword(filename):
     """Read data as subwords."""
-    text_data = read_data(filename, clean=False)
+    text_data = read_data(filename)
 
     text_layered = break_in_subword(text_data)
 
@@ -204,14 +204,17 @@ if __name__ == "__main__":
     subword_embeddings, subword_tokenizer = get_embeddings_tokenizer("data/parallel.en.syll",
                                                                      "data/parallel.hi.syll",
                                                                      EMBEDDING_DIM)
+    print("Layered english data")
     layered_data_e = read_layered_subword("data/IITB.en-hi.en")
+    print("Layered hindi data")
     layered_data_h = read_layered_subword("data/IITB.en-hi.hi.roman.clean")
 
     print("Gen hindi sequence")
     h_sequences = get_sequences(layered_data_h, MAX_SENT_LENGTH, MAX_WORD_LENGTH, subword_tokenizer)
     print("Gen eng sequence")
     e_sequences = get_sequences(layered_data_e, MAX_SENT_LENGTH, MAX_WORD_LENGTH, subword_tokenizer)
-    pdb.set_trace()
+
+    print("Split")
     split_point = int(h_sequences.shape[0]*VALIDATION_SPLIT)
 
     hx_train = h_sequences[0:split_point]
