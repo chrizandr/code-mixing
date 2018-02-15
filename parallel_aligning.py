@@ -128,6 +128,8 @@ def create_model(EMBEDDING_DIM, MAX_WORD_LENGTH, MAX_SENT_LENGTH, NUM_SUBWORDS, 
     # Hindi Pass
     hindi_sentence = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
     eng_sentence = Input(shape=(MAX_SENT_LENGTH, MAX_WORD_LENGTH), dtype='int64')
+    hindi_aligned = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
+    eng_aligned = Input(shape=(MAX_WORD_LENGTH,), dtype='int64')
 
     subword_embedding_layer = Embedding(NUM_SUBWORDS,
                                         EMBEDDING_DIM,
@@ -145,13 +147,19 @@ def create_model(EMBEDDING_DIM, MAX_WORD_LENGTH, MAX_SENT_LENGTH, NUM_SUBWORDS, 
     eng_sentence_out = sentence_lstm(eng_word_out)
 
     sentence_diff = Subtract()([hindi_sentence_out, eng_sentence_out])
-    sentence_norm = Multiply()([sentence_diff, sentence_diff])
-    sentence_loss = Dense(2*EMBEDDING_DIM)(sentence_norm)
+    sentence_square = Multiply()([sentence_diff, sentence_diff])
+    norm_sentence = Lambda(lambda x: K.sum(x), output_shape=lambda s: (s[0], 1))(sentence_square)
+    sentence_loss = Dense(1)(norm_sentence)
 
-    word_diff = Subtract()([hindi_word_out, eng_word_out])
-    word_norm = Multiply()([word_diff, word_diff])
-    norm_sum = Lambda(lambda x: K.sum(x, axis=1), output_shape=lambda s: (s[0], s[2]))(word_norm)
-    word_loss = Dense(2*EMBEDDING_DIM)(norm_sum)
+    hindi_aligned_embeddings = subword_embedding_layer(hindi_aligned)
+    eng_aligned_embeddings = subword_embedding_layer(eng_aligned)
+    hindi_aligned_out = word_lstm(hindi_aligned_embeddings)
+    eng_aligned_out = word_lstm(eng_aligned_embeddings)
+
+    word_diff = Subtract()([hindi_aligned_out, eng_aligned_out])
+    word_square = Multiply()([word_diff, word_diff])
+    norm_word = Lambda(lambda x: K.sum(x), output_shape=lambda s: (s[0], 1))(word_square)
+    word_loss = Dense(1)(norm_word)
 
     total_loss = Add()([word_loss, sentence_loss])
 
