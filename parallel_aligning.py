@@ -14,7 +14,7 @@ from data_handler import break_in_subword, read_data
 
 def read_layered_subword(filename):
     """Read data as subwords."""
-    text_data = read_data(filename)
+    text_data = read_data(filename, clean=False)
 
     text_layered = break_in_subword(text_data)
 
