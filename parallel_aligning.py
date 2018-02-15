@@ -164,8 +164,8 @@ def create_model(EMBEDDING_DIM, MAX_WORD_LENGTH, MAX_SENT_LENGTH, NUM_SUBWORDS, 
     eng_sentence_out = Activation('softmax')(eng_sentence_out)
 
     sentence_diff = Subtract()([hindi_sentence_out, eng_sentence_out])
-    norm_sentence = Dot(axes=1)([sentence_diff, sentence_diff])
-    sentence_loss = Lambda(lambda x: x*alpha)(norm_sentence)
+    sentence_diff = Lambda(lambda x: x*alpha)(sentence_diff)
+    sentence_loss = Dot(axes=1)([sentence_diff, sentence_diff])
     # sentence_loss = Dense(1, input_shape=(1,))(norm_sentence)
 
     # hindi_aligned_embeddings = subword_embedding_layer(hindi_aligned)
@@ -205,9 +205,9 @@ if __name__ == "__main__":
                                                                      "data/parallel.hi.syll",
                                                                      EMBEDDING_DIM)
     print("Layered english data")
-    layered_data_e = read_layered_subword("data/IITB.en-hi.en")
+    layered_data_e = read_layered_subword("data/IITB.en-hi.en.min")
     print("Layered hindi data")
-    layered_data_h = read_layered_subword("data/IITB.en-hi.hi.roman.clean")
+    layered_data_h = read_layered_subword("data/IITB.en-hi.hi.min")
 
     print("Gen hindi sequence")
     h_sequences = get_sequences(layered_data_h, MAX_SENT_LENGTH, MAX_WORD_LENGTH, subword_tokenizer)
@@ -228,7 +228,7 @@ if __name__ == "__main__":
     model = create_model(EMBEDDING_DIM, MAX_WORD_LENGTH,
                          MAX_SENT_LENGTH, len(subword_tokenizer.word_index),
                          subword_embeddings,
-                         alpha=0.5)
+                         alpha=10e4)
 
     print("model fitting - Hierachical LSTM")
     print(model.summary())
