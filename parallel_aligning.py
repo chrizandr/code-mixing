@@ -1,10 +1,11 @@
 """LSTM for learning aligned representation."""
 
 import numpy as np
+import pdb
 import json
 from keras.preprocessing.text import Tokenizer
 from keras.layers import Input, Lambda
-from keras.layers import Embedding, LSTM, Bidirectional, TimeDistributed, Dense, Add, Subtract, Multiply
+from keras.layers import Embedding, LSTM, Bidirectional, TimeDistributed, Dense, Add, Subtract, Dot
 from keras.models import Model
 from keras.callbacks import ModelCheckpoint
 from keras import backend as K
@@ -120,7 +121,7 @@ def get_embeddings_tokenizer(filename1, filename2, EMBEDDING_DIM):
     return embedding_matrix, word_tokenizer
 
 
-def create_model(EMBEDDING_DIM, MAX_WORD_LENGTH, MAX_SENT_LENGTH, NUM_SUBWORDS, subword_embeddings):
+def create_model(EMBEDDING_DIM, MAX_WORD_LENGTH, MAX_SENT_LENGTH, NUM_SUBWORDS, subword_embeddings, alpha):
     """Create model for alignment of word embeddings."""
     word_lstm = Bidirectional(LSTM(EMBEDDING_DIM), name="word_lstm")
     sentence_lstm = Bidirectional(LSTM(EMBEDDING_DIM), name="sentence_lstm")
@@ -148,9 +149,9 @@ def create_model(EMBEDDING_DIM, MAX_WORD_LENGTH, MAX_SENT_LENGTH, NUM_SUBWORDS, 
     eng_sentence_out = sentence_lstm(eng_word_out)
 
     sentence_diff = Subtract()([hindi_sentence_out, eng_sentence_out])
-    sentence_square = Multiply()([sentence_diff, sentence_diff])
-    norm_sentence = Lambda(lambda x: K.sum(x), output_shape=lambda s: (s[0], 1))(sentence_square)
-    sentence_loss = Dense(1, name="alpha1")(norm_sentence)
+    norm_sentence = Dot(axes=1)([sentence_diff, sentence_diff])
+    sentence_loss = Lambda(lambda x: x*alpha)(norm_sentence)
+    # sentence_loss = Dense(1, input_shape=(1,))(norm_sentence)
 
     # hindi_aligned_embeddings = subword_embedding_layer(hindi_aligned)
     # eng_aligned_embeddings = subword_embedding_layer(eng_aligned)
@@ -188,7 +189,6 @@ if __name__ == "__main__":
     subword_embeddings, subword_tokenizer = get_embeddings_tokenizer("data/parallel.hi.syll",
                                                                      "data/parallel.hi.syll",
                                                                      EMBEDDING_DIM)
-
     layered_data_e = read_layered_subword("data/IITB.en-hi.en")
     layered_data_h = read_layered_subword("data/IITB.en-hi.hi")
 
@@ -207,7 +207,8 @@ if __name__ == "__main__":
 
     model = create_model(EMBEDDING_DIM, MAX_WORD_LENGTH,
                          MAX_SENT_LENGTH, len(subword_tokenizer.word_index),
-                         subword_embeddings)
+                         subword_embeddings,
+                         alpha=0.5)
 
     print("model fitting - Hierachical LSTM")
     print(model.summary())
